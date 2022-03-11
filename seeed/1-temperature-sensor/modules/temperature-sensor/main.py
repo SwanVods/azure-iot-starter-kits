@@ -1,24 +1,21 @@
 #!/usr/bin/env python
 
 import sys
-import os
-import bme280
 import json
-import requests
 import time
 
-# import local devicecheck module and iothub_client
+# import local devicecheck module and azure.iot.device
 import devicecheck
 import hubmanager
 from bme280sensor import BME280Sensor
-from iothub_client import IoTHubModuleClient, IoTHubMessage
+from azure.iot.device import Message
 
 
 BME280_SEND_ENABLED = True
 BME280_SEND_INTERVAL_SECONDS = 5
 
 
-def stream_sensor_data(hub_client, bme280_sensor):
+async def stream_sensor_data(hub_client, bme280_sensor):
     global BME280_SEND_ENABLED
     global BME280_SEND_INTERVAL_SECONDS
     COUNTER = 0
@@ -31,12 +28,18 @@ def stream_sensor_data(hub_client, bme280_sensor):
             COUNTER = COUNTER + 1
             print("Sending message: {}, Body: {}".format(COUNTER, json_sensor_data))
 
-            message = IoTHubMessage(json_sensor_data)
-            hub_client.send_event_async(
-                "temperatureOutput", message, send_confirmation_callback, COUNTER)
-
+            message = Message(json_sensor_data)
+            await hub_client.send_message(message)
+            # hub_client.send_event_async(
+            #     "temperatureOutput", message, send_confirmation_callback, COUNTER)
+        print("Waiting for {} seconds for next reading...".format(BME280_SEND_INTERVAL_SECONDS))
         time.sleep(BME280_SEND_INTERVAL_SECONDS)
-
+        
+def message_handler(message):
+    print("the data in the message received was ")
+    print(message.data)
+    print("custom properties are")
+    print(message.custom_properties)
 
 def send_confirmation_callback(message, result, user_context):
     print("Confirmation[{}] received with result: {}".format(user_context, result))
@@ -68,7 +71,9 @@ if __name__ == '__main__':
 
     # Create the IoT Edge connection.
     hub = hubmanager.HubManager()
-    hub.client.set_module_twin_callback(module_twin_callback, 0)
-
+    # hub.client.set_module_twin_callback(module_twin_callback, 0)
     # Start streaming sensor data.
     stream_sensor_data(hub.client, bme280_sensor)
+    
+    # set the message handler on the client
+    hub.client.on_message_received = message_handler

@@ -1,7 +1,5 @@
-import os
 import sys
-import iothub_client
-from iothub_client import IoTHubModuleClient, IoTHubClientError, IoTHubTransportProvider
+from azure.iot.device.aio import IoTHubDeviceClient
 
 # messageTimeout - the maximum time in milliseconds until a message times out.
 # The timeout period starts at IoTHubClient.send_event_async.
@@ -10,16 +8,15 @@ MESSAGE_TIMEOUT = 10000
 
 class HubManager(object):
 
-    def __init__(self, protocol = IoTHubTransportProvider.MQTT):
+    def __init__(self):
 
         print("\nPython %s\n" % sys.version)
         print("IoT Hub Client for Python")
-        print("Starting the IoT Hub Python sample using protocol %s..." % protocol)
 
-        self.client_protocol = protocol
-        self.client = IoTHubModuleClient()
-        self.client.create_from_environment(protocol)
+        self.client = IoTHubDeviceClient.create_from_connection_string('HostName=ProyekAkhir.azure-devices.net;DeviceId=raspberrypi;SharedAccessKey=unMeV1DPFInhQN6IuxXvt98LqoHSr//0Dhi+q4YdukU=')
+        self.client.connect()
+        
 
         # set the time until a message times out
-        self.client.set_option("messageTimeout", MESSAGE_TIMEOUT)
+        # self.client.receive_message(block=True, timeout=MESSAGE_TIMEOUT)
         # some embedded platforms need certificate information

@@ -10,12 +10,12 @@ class BME280Sensor():
         self.raw_sensor_data = None
 
         try:
-            bme280.load_calibration_params(self.bus, self.address)
+            self.calibration_params = bme280.load_calibration_params(self.bus, self.address)
         except Exception as e:
             print(e)
 
     def get_sample(self):
-        sample = bme280.sample(self.bus, self.address)
+        sample = bme280.sample(self.bus, self.address, self.calibration_params)
 
         machine = Machine(sample.temperature, sample.pressure)
         ambient = Ambient(sample.temperature, sample.humidity)

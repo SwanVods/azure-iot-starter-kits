@@ -1,6 +1,10 @@
-FROM resin/rpi-raspbian:stretch
+FROM balenalib/rpi-raspbian:stretch
 
 RUN [ "cross-build-start" ]
+
+WORKDIR /app
+
+COPY *.py ./
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
@@ -12,15 +16,9 @@ RUN apt-get update && apt-get install -y \
         i2c-tools \
         libboost-python1.62.0
 
-COPY requirements.txt ./
-
 RUN pip3 install --upgrade pip 
 RUN pip3 install --upgrade setuptools 
-RUN pip3 install -r requirements.txt
-
-WORKDIR /app
-
-COPY *.py ./
+RUN pip3 install azure-iot-device smbus2 RPi.bme280 requests
 
 RUN [ "cross-build-end" ]  
 
