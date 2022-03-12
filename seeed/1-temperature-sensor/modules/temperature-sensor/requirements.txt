@@ -1,4 +1,4 @@
-azure-iothub-device-client
+azure-iot-device
 smbus2
 RPi.bme280
 requests
