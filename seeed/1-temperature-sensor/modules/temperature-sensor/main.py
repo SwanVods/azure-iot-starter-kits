@@ -1,12 +1,14 @@
 #!/usr/bin/env python
-
-import sys
+import asyncio
 import json
 import time
+import cosmos_mongo as cosmos
+import pymongo
 
 # import local devicecheck module and azure.iot.device
 import devicecheck
 import hubmanager
+from azure.iot.device.aio import IoTHubDeviceClient
 from bme280sensor import BME280Sensor
 from azure.iot.device import Message
 
@@ -14,66 +16,97 @@ from azure.iot.device import Message
 BME280_SEND_ENABLED = True
 BME280_SEND_INTERVAL_SECONDS = 5
 
+CONNECTION_STRING = "HostName=ProyekAkhir.azure-devices.net;DeviceId=raspberrypi;SharedAccessKey=unMeV1DPFInhQN6IuxXvt98LqoHSr//0Dhi+q4YdukU="
 
-async def stream_sensor_data(hub_client, bme280_sensor):
-    global BME280_SEND_ENABLED
-    global BME280_SEND_INTERVAL_SECONDS
-    COUNTER = 0
+DB_CONNECTION_STRING = "mongodb://cosmos-ta:H1NEBb3nPPBH2leGlplggZNcVFeIxGrwSm1Sl8wrbXGlsPnHslYZoR3WvjRFAVB8E5B6fuIKjgFzRSIORMyRMw==@cosmos-ta.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&replicaSet=globaldb&maxIdleTimeMS=120000&appName=@cosmos-ta@" # Prompts user for connection string
+DB_NAME = "proyek_akhir"
+UNSHARDED_COLLECTION_NAME = "sensor_data"
 
+# allows the user to quit the program from the terminal
+def stdin_listener():
+    """
+    Listener for quitting the stream
+    """
     while True:
-        sensor_data = bme280_sensor.get_sample()
-        json_sensor_data = json.dumps(sensor_data, default=lambda o: o.__dict__)
+        if KeyboardInterrupt:
+            print("Quitting...")
+            break
 
-        if BME280_SEND_ENABLED:
-            COUNTER = COUNTER + 1
-            print("Sending message: {}, Body: {}".format(COUNTER, json_sensor_data))
-
-            message = Message(json_sensor_data)
-            await hub_client.send_message(message)
-            # hub_client.send_event_async(
-            #     "temperatureOutput", message, send_confirmation_callback, COUNTER)
-        print("Waiting for {} seconds for next reading...".format(BME280_SEND_INTERVAL_SECONDS))
-        time.sleep(BME280_SEND_INTERVAL_SECONDS)
-        
-def message_handler(message):
-    print("the data in the message received was ")
-    print(message.data)
-    print("custom properties are")
-    print(message.custom_properties)
-
-def send_confirmation_callback(message, result, user_context):
-    print("Confirmation[{}] received with result: {}".format(user_context, result))
-
-
-# module_twin_callback is invoked when twin's desired properties are updated.
-def module_twin_callback(update_state, payload, user_context):
-    global BME280_SEND_ENABLED
-    global BME280_SEND_INTERVAL_SECONDS
-
-    print("\nTwin callback called with:\nupdateStatus = {}\npayload = {}".format(update_state, payload))
-    data = json.loads(payload)
-    if "desired" in data:
-        data = data["desired"]
-
-    if "SendData" in data:
-        BME280_SEND_ENABLED = bool(data["SendData"])
-    if "SendInterval" in data:
-        BME280_SEND_INTERVAL_SECONDS = int(data["SendInterval"])
-
-
-if __name__ == '__main__':
-    # Verify the temperature sensor is connected.
-    if not devicecheck.check_for_bme280():
-        sys.exit("ERROR: BME280 temperature sensor is not detected. Please power off the device and attach it to the i2c port to use this module.")
-
-    # Create the temperature sensor.
-    bme280_sensor = BME280Sensor()
-
-    # Create the IoT Edge connection.
-    hub = hubmanager.HubManager()
-    # hub.client.set_module_twin_callback(module_twin_callback, 0)
-    # Start streaming sensor data.
-    stream_sensor_data(hub.client, bme280_sensor)
+async def main():
+    hub_client = IoTHubDeviceClient.create_from_connection_string(CONNECTION_STRING)
+    await hub_client.connect()
+    print("The connection status is : ")
+    print(hub_client.connected)
     
-    # set the message handler on the client
-    hub.client.on_message_received = message_handler
+     # initialize bme280 sensor
+    bme280_sensor = BME280Sensor()
+    
+    # initialize mongodb
+    db_client = pymongo.MongoClient(DB_CONNECTION_STRING)
+    try:
+        db_client.server_info() # validate connection string
+    except pymongo.errors.ServerSelectionTimeoutError:
+        raise TimeoutError("Invalid API for MongoDB connection string or timed out when attempting to connect")
+    
+    async def stream_sensor_data(hub_client, bme280_sensor, client):
+        global BME280_SEND_ENABLED
+        global BME280_SEND_INTERVAL_SECONDS
+
+        while True:
+            if BME280_SEND_ENABLED:
+                # Send BME280 sensor data to Azure IoT Hub.
+                temperature = bme280_sensor.get_temperature()
+                humidity = bme280_sensor.get_humidity()
+                pressure = bme280_sensor.get_pressure()
+                print("Temperature: {} C\nHumidity: {} %\nPressure: {} hPa".format(temperature, humidity, pressure))
+                
+                # insert to cosmos DB
+                # db.insert((temperature, humidity, pressure))
+                # db = client.get_database_client(DATABASE_ID)
+                # container = db.get_container_client(CONTAINER_ID)
+                # cosmos.create_item(container, temperature, humidity, pressure)
+                
+                # collection = cosmos.create_database_unsharded_collection(client, DB_NAME, UNSHARDED_COLLECTION_NAME)
+                # cosmos.insert_document(collection, temperature, humidity, pressure)
+
+                message = Message(json.dumps({
+                    "machine": {
+                        "temperature": temperature, 
+                        "pressure": pressure,
+                    },
+                    "ambient": {
+                        "temperature": temperature,
+                        "humidity": humidity,
+                    }, 
+                    "timestamp": time.time()
+                }))
+                
+                message.message_id = "message_" + str(int(time.time()))
+                message.correlation_id = "correlation_" + str(int(time.time()))
+                message.content_encoding = "utf-8"
+                message.content_type = "application/json"
+                message.custom_properties["temperatureAlert"] = "true" if temperature > 30 else "false"
+                await hub_client.send_message(message)
+            await asyncio.sleep(BME280_SEND_INTERVAL_SECONDS)
+
+    
+    send_telemetry_task = asyncio.create_task(stream_sensor_data(hub_client, bme280_sensor, db_client)) 
+    
+    # try:
+        # start the sensor streaming
+    loop = asyncio.get_running_loop()
+    user_finished = loop.run_in_executor(None, stdin_listener)
+    
+    await user_finished
+    
+    send_telemetry_task.cancel()
+    await hub_client.disconnect()
+        # loop.run_until_complete(stream_sensor_data(hub_manager.client, bme280_sensor, db_client))
+
+# run the script
+if __name__ == '__main__':
+    asyncio.run(main())
+    # initialize hub manager
+    # hub_manager = hubmanager.HubManager(CONNECTION_STRING)
+
+   

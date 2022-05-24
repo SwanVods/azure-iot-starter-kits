@@ -1,10 +1,12 @@
-FROM balenalib/rpi-raspbian:stretch
+FROM balenalib/rpi-raspbian:buster
 
 RUN [ "cross-build-start" ]
 
 WORKDIR /app
 
 COPY *.py ./
+
+COPY requirements.txt ./
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
@@ -18,7 +20,7 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip3 install --upgrade pip 
 RUN pip3 install --upgrade setuptools 
-RUN pip3 install azure-iot-device smbus2 RPi.bme280 requests
+RUN pip3 install -r requirements.txt
 
 RUN [ "cross-build-end" ]  
 

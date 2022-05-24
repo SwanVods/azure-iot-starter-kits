@@ -3,9 +3,8 @@ import bme280
 
 class BME280Sensor():
     def __init__(self):
-        self.port = 1
         self.address = 0x76
-        self.bus = smbus2.SMBus(self.port)
+        self.bus = smbus2.SMBus(1)
         self.json_temperature_data = None
         self.raw_sensor_data = None
 
@@ -15,29 +14,41 @@ class BME280Sensor():
             print(e)
 
     def get_sample(self):
-        sample = bme280.sample(self.bus, self.address, self.calibration_params)
+        return bme280.sample(self.bus, self.address, self.calibration_params)
 
-        machine = Machine(sample.temperature, sample.pressure)
-        ambient = Ambient(sample.temperature, sample.humidity)
+    def get_temperature(self):
+        sample = self.get_sample()
 
-        return MessageBody(machine, ambient, str(sample.timestamp), sample.id)
+        return sample.temperature
 
+    def get_humidity(self):
+        sample = self.get_sample()
 
-class MessageBody():
-    def __init__(self, machine, ambient, timeCreated, id):
-        self.machine = machine
-        self.ambient = ambient
-        self.timeCreated = timeCreated
-        self.id = id
+        return sample.humidity
 
+    def get_pressure(self):
+        sample = self.get_sample()
 
-class Machine():
-    def __init__(self, temperature, pressure):
-        self.temperature = temperature
-        self.pressure = pressure
+        return sample.pressure
 
+    def get_json_data(self):
+        sample = self.get_sample()
 
-class Ambient():
-    def __init__(self, temperature, humidity):
-        self.temperature = temperature
-        self.humidity = humidity
+        self.json_temperature_data = {
+            "temperature": sample.temperature,
+            "humidity": sample.humidity,
+            "pressure": sample.pressure
+        }
+
+        return self.json_temperature_data
+
+    def get_raw_data(self):
+        sample = self.get_sample()
+
+        self.raw_sensor_data = {
+            "temperature": sample.temperature,
+            "humidity": sample.humidity,
+            "pressure": sample.pressure
+        }
+
+        return self.raw_sensor_data

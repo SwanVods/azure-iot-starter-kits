@@ -1,4 +1,3 @@
-import sys
 from azure.iot.device.aio import IoTHubDeviceClient
 
 # messageTimeout - the maximum time in milliseconds until a message times out.
@@ -8,15 +7,16 @@ MESSAGE_TIMEOUT = 10000
 
 class HubManager(object):
 
-    def __init__(self):
+    async def __init__(self, connection_string):
+        self.client = IoTHubDeviceClient.create_from_connection_string(connection_string)
+        await self.client.connect()
 
-        print("\nPython %s\n" % sys.version)
-        print("IoT Hub Client for Python")
+    async def send_message(self, message):
+        self.client.send_message(message)
 
-        self.client = IoTHubDeviceClient.create_from_connection_string('HostName=ProyekAkhir.azure-devices.net;DeviceId=raspberrypi;SharedAccessKey=unMeV1DPFInhQN6IuxXvt98LqoHSr//0Dhi+q4YdukU=')
-        self.client.connect()
-        
+    async def receive_message(self):
+        message = self.client.receive_message()
+        return message
 
-        # set the time until a message times out
-        # self.client.receive_message(block=True, timeout=MESSAGE_TIMEOUT)
-        # some embedded platforms need certificate information
+    async def disconnect(self):
+        await self.client.disconnect()
