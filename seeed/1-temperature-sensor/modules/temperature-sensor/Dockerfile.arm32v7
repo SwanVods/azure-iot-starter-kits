@@ -1,12 +1,22 @@
-FROM balenalib/rpi-raspbian:buster
+FROM balenalib/rpi-raspbian:bullseye
 
 RUN [ "cross-build-start" ]
 
 WORKDIR /app
 
+ARG raspberry_cs="HostName=proyek-akhir.azure-devices.net;DeviceId=raspberry;SharedAccessKey=l92jykAxb6ey8Ux0TgravAZC9VAPszDtH+lYPpiR9OE="
+
+ARG mongodb_cs="mongodb://cosmos-ta:H1NEBb3nPPBH2leGlplggZNcVFeIxGrwSm1Sl8wrbXGlsPnHslYZoR3WvjRFAVB8E5B6fuIKjgFzRSIORMyRMw==@cosmos-ta.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&replicaSet=globaldb&maxIdleTimeMS=120000&appName=@cosmos-ta@"
+
+ENV DEVICE_CS=${raspberry_cs}
+
+ENV DB_CS=${mongodb_cs}
+
 COPY *.py ./
 
 COPY requirements.txt ./
+
+ADD . /app
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
@@ -16,7 +26,7 @@ RUN apt-get update && apt-get install -y \
         wget \
         build-essential \
         i2c-tools \
-        libboost-python1.62.0
+        libboost-python-dev
 
 RUN pip3 install --upgrade pip 
 RUN pip3 install --upgrade setuptools 

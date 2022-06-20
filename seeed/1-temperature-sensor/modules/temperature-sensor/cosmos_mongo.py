@@ -14,9 +14,9 @@ def insert_document(collection, temperature, humidity, pressure):
 
     temperature_data = {
         'sensor_id': 'BME280',
-        'temperature': temperature,
-        'humidity': humidity,
-        'pressure': pressure,
+        'ambient_temperature_avg': temperature,
+        'ambient_humidity_avg': humidity,
+        'machine_pressure_avg': pressure,
         'ts': int(time())
     }
     document_id = collection.insert_one(temperature_data).inserted_id

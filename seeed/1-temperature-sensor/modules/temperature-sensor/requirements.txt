@@ -2,6 +2,7 @@ azure-iot-device
 smbus2
 RPi.bme280
 requests
+gpiozero
 pymongo
 azure-core==1.1.1
 azure-cosmos==4.1.0
