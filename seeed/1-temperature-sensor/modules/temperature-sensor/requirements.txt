@@ -4,6 +4,9 @@ RPi.bme280
 requests
 gpiozero
 pymongo
+apscheduler
+pandas
+numpy
 azure-core==1.1.1
 azure-cosmos==4.1.0
 certifi==2019.11.28

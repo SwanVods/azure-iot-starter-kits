@@ -21,9 +21,11 @@ BME280_SEND_ENABLED = True
 BME280_SEND_INTERVAL_SECONDS = 15
 
 CONNECTION_STRING = os.getenv("DEVICE_CS")
-DB_CONNECTION_STRING = os.getenv("DB_CS")# Prompts user for connection string
+DB_CONNECTION_STRING = os.getenv("DB_CS") # Prompts user for connection string
 DB_NAME = "proyek_akhir"
 UNSHARDED_COLLECTION_NAME = "sensor_data"
+
+df = pd.DataFrame(columns=['temperature', 'humidity', 'pressure'])
 
 def main():
     hub_client = IoTHubDeviceClient.create_from_connection_string(CONNECTION_STRING)
@@ -33,11 +35,14 @@ def main():
     
     scheduler = BlockingScheduler()
     scheduler.add_job(insert_to_database, 'interval', hours=1)
-    scheduler.start()
+
+    
     try:
+        # start scheduler
+        scheduler.start()
+        
         # Run the sample in the event loop
         loop.run_until_complete(stream_sensor_data(hub_client, db_client, BME280Sensor(), Buzzer(12, pin_factory=NativeFactory())))
-        
         
     except KeyboardInterrupt:
         print("IoTHubClients stopped by user")
@@ -48,9 +53,18 @@ def main():
         loop.close()
     
     
-def insert_to_database(client, temperature, humidity, pressure):
+def insert_to_database(client):
+    global df
     collection = cosmos.create_database_unsharded_collection(client, DB_NAME, UNSHARDED_COLLECTION_NAME)
+    temperature = df['temperature'].mean()
+    humidity = df['humidity'].mean()
+    pressure = df['pressure'].mean()
+    
     cosmos.insert_document(collection, temperature, humidity, pressure)
+    print('Inserted to database')
+    
+    # reset df
+    df = pd.DataFrame(columns=['temperature', 'humidity', 'pressure'])
 
 async def record_sensor_data(db_client, bme280_sensor):
     temperature_sum = 0
@@ -61,7 +75,11 @@ async def record_sensor_data(db_client, bme280_sensor):
         humidity_sum += bme280_sensor.get_humidity()
         pressure_sum += bme280_sensor.get_pressure()
         await asyncio.sleep(1)
-    # insert_to_database(db_client, temperature_sum / 15, humidity_sum / 15, pressure_sum / 15)
+        
+    global df
+    
+    df.append({'temperature': temperature_sum/15, 'humidity': humidity_sum/15, 'pressure': pressure_sum/15}, ignore_index=True)
+    
     return temperature_sum / 15, humidity_sum / 15, pressure_sum / 15
     
     
