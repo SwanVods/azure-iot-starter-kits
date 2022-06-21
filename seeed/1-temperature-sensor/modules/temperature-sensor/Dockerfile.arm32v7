@@ -26,7 +26,8 @@ RUN apt-get update && apt-get install -y \
         wget \
         build-essential \
         i2c-tools \
-        libboost-python-dev
+        libboost-python-dev \
+        libatlas3-base
 
 RUN pip3 install --upgrade pip 
 RUN pip3 install --upgrade setuptools 

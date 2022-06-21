@@ -4,7 +4,7 @@ RPi.bme280
 requests
 gpiozero
 pymongo
-apscheduler
+aioschedule
 pandas
 numpy
 azure-core==1.1.1

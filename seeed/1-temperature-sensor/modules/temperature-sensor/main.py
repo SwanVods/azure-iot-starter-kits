@@ -3,46 +3,43 @@ import asyncio
 import json
 import time
 import os
-import pymongo
-import cosmos_mongo as cosmos
-import numpy as np
 import pandas as pd
 
-# import local devicecheck module and azure.iot.device
+import azure.cosmos.cosmos_client as cosmos_client
+
+import cosmos_config as config
+
 from gpiozero.pins.native import NativeFactory
 from gpiozero import Buzzer
 from azure.iot.device.aio import IoTHubDeviceClient
 from bme280sensor import BME280Sensor
 from azure.iot.device import Message
-from apscheduler.schedulers.blocking import BlockingScheduler
-
+import aioschedule as schedule
 
 BME280_SEND_ENABLED = True
 BME280_SEND_INTERVAL_SECONDS = 15
 
 CONNECTION_STRING = os.getenv("DEVICE_CS")
-DB_CONNECTION_STRING = os.getenv("DB_CS") # Prompts user for connection string
-DB_NAME = "proyek_akhir"
-UNSHARDED_COLLECTION_NAME = "sensor_data"
+
+HOST = config.settings['host']
+MASTER_KEY = config.settings['master_key']
+DATABASE_ID = config.settings['database_id']
+CONTAINER_ID = config.settings['container_id']
 
 df = pd.DataFrame(columns=['temperature', 'humidity', 'pressure'])
 
 def main():
     hub_client = IoTHubDeviceClient.create_from_connection_string(CONNECTION_STRING)
-    db_client = pymongo.MongoClient(DB_CONNECTION_STRING)
     
     loop = asyncio.get_event_loop()
     
-    scheduler = BlockingScheduler()
-    scheduler.add_job(insert_to_database, 'interval', hours=1)
+    schedule.every().hour.do(insert_to_database, message='things')
 
-    
     try:
-        # start scheduler
-        scheduler.start()
         
         # Run the sample in the event loop
-        loop.run_until_complete(stream_sensor_data(hub_client, db_client, BME280Sensor(), Buzzer(12, pin_factory=NativeFactory())))
+        loop.run_until_complete(stream_sensor_data(hub_client, BME280Sensor(), Buzzer(12, pin_factory=NativeFactory())))
+        loop.run_until_complete(schedule.run_pending())
         
     except KeyboardInterrupt:
         print("IoTHubClients stopped by user")
@@ -53,20 +50,34 @@ def main():
         loop.close()
     
     
-def insert_to_database(client):
+async def insert_to_database():
     global df
-    collection = cosmos.create_database_unsharded_collection(client, DB_NAME, UNSHARDED_COLLECTION_NAME)
+    
+    # Create the Cosmos client object
+    db_client = cosmos_client.CosmosClient(HOST, {'masterKey': MASTER_KEY})
+    db_client.get_database_client(DATABASE_ID)
+    print('Database with id \'{0}\' was found'.format(DATABASE_ID))
+    
+    container = db_client.get_container_client(CONTAINER_ID)
+    
     temperature = df['temperature'].mean()
     humidity = df['humidity'].mean()
     pressure = df['pressure'].mean()
     
-    cosmos.insert_document(collection, temperature, humidity, pressure)
+    data = {
+        'id' : str(int(time.time())),
+        'temperature_avg' : temperature,
+        'humidity_avg' : humidity,
+        'pressure_avg' : pressure
+    }
+    
+    container.create_item(body=data)
     print('Inserted to database')
     
     # reset df
     df = pd.DataFrame(columns=['temperature', 'humidity', 'pressure'])
 
-async def record_sensor_data(db_client, bme280_sensor):
+async def record_sensor_data(bme280_sensor):
     temperature_sum = 0
     humidity_sum = 0
     pressure_sum = 0
@@ -78,12 +89,12 @@ async def record_sensor_data(db_client, bme280_sensor):
         
     global df
     
-    df.append({'temperature': temperature_sum/15, 'humidity': humidity_sum/15, 'pressure': pressure_sum/15}, ignore_index=True)
+    df = pd.concat([df, pd.DataFrame({'temperature': [temperature_sum/15], 'humidity': [humidity_sum/15], 'pressure':[pressure_sum/15]})], ignore_index=True, axis=0)
     
     return temperature_sum / 15, humidity_sum / 15, pressure_sum / 15
     
     
-async def stream_sensor_data(hub_client, db_client, bme280_sensor, buzzer):
+async def stream_sensor_data(hub_client, bme280_sensor, buzzer):
     global BME280_SEND_ENABLED
     global BME280_SEND_INTERVAL_SECONDS
 
@@ -95,8 +106,9 @@ async def stream_sensor_data(hub_client, db_client, bme280_sensor, buzzer):
     while True:
         if BME280_SEND_ENABLED:
             print("Sending sensor data to Azure IoT Hub")
+            
             # Send BME280 sensor data to Azure IoT Hub.
-            temperature, humidity, pressure = await record_sensor_data(db_client, bme280_sensor)
+            temperature, humidity, pressure = await record_sensor_data(bme280_sensor)
             print("Avg. Temperature: {0:0.2f} C, \nAvg. Humidity: {1:0.2f} %, \nAvg. Pressure: {2:0.3f} hPa\n".format(temperature, humidity, pressure))
             
             if(temperature > 32) :
