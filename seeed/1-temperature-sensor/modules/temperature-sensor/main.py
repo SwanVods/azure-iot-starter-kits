@@ -33,7 +33,7 @@ def main():
     
     loop = asyncio.get_event_loop()
     
-    schedule.every().hour.do(insert_to_database, message='things')
+    schedule.every(30).minutes.do(insert_to_database, message='things')
 
     try:
         
