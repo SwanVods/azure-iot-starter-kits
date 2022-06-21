@@ -3,8 +3,7 @@ smbus2
 RPi.bme280
 requests
 gpiozero
-azure-cosmos
-aioschedule
+azure-cosmos==3.2.0
 pandas
 numpy
 azure-core==1.1.1
