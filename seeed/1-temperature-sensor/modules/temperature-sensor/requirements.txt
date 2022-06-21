@@ -3,12 +3,11 @@ smbus2
 RPi.bme280
 requests
 gpiozero
-pymongo
+azure-cosmos
 aioschedule
 pandas
 numpy
 azure-core==1.1.1
-azure-cosmos==4.1.0
 certifi==2019.11.28
 chardet==3.0.4
 idna==2.8

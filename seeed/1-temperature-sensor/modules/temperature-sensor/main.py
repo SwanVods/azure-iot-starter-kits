@@ -33,13 +33,15 @@ def main():
     
     loop = asyncio.get_event_loop()
     
+    
+    
     schedule.every(30).minutes.do(insert_to_database, message='things')
 
     try:
-        
+        loop.create_task(stream_sensor_data(hub_client, BME280Sensor(), Buzzer(12, pin_factory=NativeFactory())))
+        loop.create_task(schedule.run_pending())
         # Run the sample in the event loop
-        loop.run_until_complete(stream_sensor_data(hub_client, BME280Sensor(), Buzzer(12, pin_factory=NativeFactory())))
-        loop.run_until_complete(schedule.run_pending())
+        loop.run_forever()
         
     except KeyboardInterrupt:
         print("IoTHubClients stopped by user")
@@ -55,10 +57,10 @@ async def insert_to_database():
     
     # Create the Cosmos client object
     db_client = cosmos_client.CosmosClient(HOST, {'masterKey': MASTER_KEY})
-    db_client.get_database_client(DATABASE_ID)
+    db = db_client.get_database_client(DATABASE_ID)
     print('Database with id \'{0}\' was found'.format(DATABASE_ID))
     
-    container = db_client.get_container_client(CONTAINER_ID)
+    container = db.get_container_client(CONTAINER_ID)
     
     temperature = df['temperature'].mean()
     humidity = df['humidity'].mean()
